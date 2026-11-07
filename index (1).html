@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Exchange</title>
+    <!-- Tailwind CSS CDN -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6C38FF">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for UI icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', '"SF Pro Text"', 'Roboto', 'sans-serif'],
+                    },
+                    colors: {
+                        ios: {
+                            purple: '#6C38FF',
+                            purpleActive: '#5423E0',
+                            pink: '#FE2C55',
+                            textDark: '#111827',
+                            textSubtle: '#6B7280',
+                            greenCheck: '#00C853'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            background-color: #0F172A;
+            -webkit-tap-highlight-color: transparent;
+            letter-spacing: -0.015em;
+        }
+
+        .card-selected {
+            border: 1.5px solid #3B82F6 !important;
+            background-color: #F4F8FF !important;
+        }
+
+        .tiktok-coin-img {
+            display: inline-block;
+            vertical-align: middle;
+            filter: drop-shadow(0px 1.5px 2px rgba(0,0,0,0.18));
+        }
+
+        /* Animations */
+        @keyframes iosPop {
+            0% { transform: scale(0.2); opacity: 0; }
+            70% { transform: scale(1.08); opacity: 1; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes iosFadeUp {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .anim-pop-check { animation: iosPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        .anim-step-1 { animation: iosFadeUp 0.3s ease-out 0.1s forwards; opacity: 0; }
+        .anim-step-2 { animation: iosFadeUp 0.3s ease-out 0.25s forwards; opacity: 0; }
+        .anim-step-3 { animation: iosFadeUp 0.3s ease-out 0.40s forwards; opacity: 0; }
+        .anim-step-4 { animation: iosFadeUp 0.3s ease-out 0.55s forwards; opacity: 0; }
+    </style>
+</head>
+<body class="min-h-screen bg-white flex flex-col justify-center items-center p-0 m-0">
+
+    <!-- 6-Month Expiry Fatal Block Overlay -->
+    <div id="app-expired-overlay" class="fixed inset-0 z-[100] bg-slate-950 text-white flex flex-col items-center justify-center p-6 text-center hidden">
+        <div class="w-16 h-16 bg-rose-500/10 rounded-2xl flex items-center justify-center mb-5 border border-rose-500/20 shadow-lg">
+            <i class="fa-solid fa-lock text-rose-500 text-2xl"></i>
+        </div>
+        <h2 class="text-xl font-bold text-white mb-2">Application License Expired</h2>
+        <p class="text-xs text-slate-400 font-mono mb-6 max-w-xs leading-relaxed">
+            Error Code: <span class="text-rose-400 font-bold">ERR_LICENSE_VALIDATION_TIMEOUT</span><br>
+            The 6-month authorization period from baseline date has concluded. All workflows have been permanently locked.
+        </p>
+        <div class="px-4 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-[11px] font-mono text-slate-500 shadow-inner">
+            Status: License Expired / Access Revoked
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-6 z-50 -translate-y-20 opacity-0 transition-all duration-300 bg-slate-900/90 backdrop-blur-md text-white px-5 py-2.5 rounded-full shadow-2xl flex items-center gap-2.5 text-xs font-semibold">
+        <i id="toast-icon" class="fa-solid fa-circle-info text-blue-400 text-sm"></i>
+        <span id="toast-message">Notification</span>
+    </div>
+
+    <!-- Full-Screen Processing Overlay (2 Seconds Loading) -->
+    <div id="exchange-loading-overlay" class="fixed inset-0 z-50 bg-white/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center hidden">
+        <div class="w-20 h-20 bg-ios-purple/10 rounded-3xl flex items-center justify-center mb-6 shadow-sm animate-pulse">
+            <i class="fa-solid fa-arrows-rotate text-ios-purple text-3xl fa-spin"></i>
+        </div>
+        <h2 class="text-xl font-bold text-slate-900 mb-2">Processing Exchange...</h2>
+        <p class="text-xs text-slate-400 font-medium mb-6">Transferring TikTok coins to recipient profile</p>
+        <div class="w-48 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+            <div class="bg-ios-purple h-full w-full animate-pulse"></div>
+        </div>
+    </div>
+
+    <!-- Full-Screen Responsive Application Container -->
+    <div class="w-full max-w-md min-h-screen bg-white flex flex-col justify-between relative select-none mx-auto shadow-sm">
+
+        <!-- 3D TikTok Coin Template -->
+        <template id="tiktok-coin-svg">
+            <svg class="tiktok-coin-img w-5 h-5 shrink-0" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="50" cy="50" r="48" fill="url(#outerGold)" stroke="#A36F00" stroke-width="2"/>
+                <circle cx="50" cy="50" r="39" fill="url(#innerGold)" stroke="#E0A100" stroke-width="1.5"/>
+                <!-- Outer arrow ring inside coin -->
+                <path d="M50 16 A 34 34 0 1 1 20 62" stroke="#FFF7D6" stroke-width="6.5" stroke-linecap="round" fill="none"/>
+                <polygon points="50,9 62,18 48,24" fill="#FFF7D6"/>
+                <!-- TikTok Note Symbol inside coin -->
+                <path d="M57 32 C 57 32, 60 38, 70 39 V 47 C 64 47, 58 44, 57 42 V 57 C 57 66, 49 71, 41 68 C 34 65, 32 57, 36 50 C 40 44, 49 45, 49 53 V 32 H 57 Z" fill="#FFF7D6"/>
+                <defs>
+                    <linearGradient id="outerGold" x1="0" y1="0" x2="100" y2="100">
+                        <stop offset="0%" stop-color="#F3BD1B"/>
+                        <stop offset="50%" stop-color="#D49300"/>
+                        <stop offset="100%" stop-color="#8C5C00"/>
+                    </linearGradient>
+                    <linearGradient id="innerGold" x1="0" y1="0" x2="100" y2="100">
+                        <stop offset="0%" stop-color="#FFE478"/>
+                        <stop offset="50%" stop-color="#F59E0B"/>
+                        <stop offset="100%" stop-color="#B45309"/>
+                    </linearGradient>
+                </defs>
+            </svg>
+        </template>
+        
+        <!-- ================= EXCHANGE SCREEN ================= -->
+        <div id="exchange-screen" class="px-6 pb-8 pt-6 flex-1 flex flex-col justify-between">
+            <div>
+                <!-- Header -->
+                <div class="flex items-center justify-between mb-6">
+                    <button class="w-8 h-8 flex items-center justify-start text-slate-900 active:opacity-50">
+                        <i class="fa-solid fa-arrow-left text-lg"></i>
+                    </button>
+                    <h1 class="text-[17px] font-bold text-slate-900 tracking-tight">Exchange</h1>
+                    <a href="add_balance.html" class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-ios-purple active:scale-95 transition">
+                        <i class="fa-solid fa-plus text-sm"></i>
+                    </a>
+                </div>
+
+                <!-- Main Balance Section (Highlighted Dollars) -->
+                <div class="text-center mb-8">
+                    <div class="text-[13px] font-medium text-slate-900 mb-1">TikTok Earnings Balance</div>
+
+                    <!-- Read-only Display showing Dollars -->
+                    <div class="inline-block relative">
+                        <div id="balance-display-container" class="py-0.5 px-3 rounded-xl border border-transparent flex items-center justify-center gap-1">
+                            <span class="text-[42px] font-black text-slate-900 tracking-tight leading-none">$<span id="balance-amount-display">0.00</span></span>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Subtitle showing Coins equivalent -->
+                    <div class="text-[13px] font-medium text-indigo-900 mt-2 flex items-center justify-center gap-1">
+                        <span>≈ <span id="balance-subtitle-coins">0</span></span>
+                        <span class="inline-flex items-center mx-0.5 coin-slot"></span>
+                        <span class="font-bold text-indigo-900">Coins</span>
+                    </div>
+                    <div class="text-[12px] text-indigo-400 font-normal mt-1 flex items-center justify-center gap-2">
+                        <span>Available earnings balance for exchange</span>
+                        <a href="add_balance.html" class="text-ios-purple font-bold underline hover:opacity-80">+Add</a>
+                    </div>
+                </div>
+
+                <!-- Username Search Section -->
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-2 px-0.5">
+                        <span class="text-[13px] font-semibold text-slate-900">TikTok user name</span>
+                        <button id="btn-search-user" onclick="fetchTikTokUser()" class="text-ios-pink font-bold text-[14px] hover:opacity-80 transition flex items-center gap-1 active:opacity-60">
+                            <span id="search-btn-text">Search</span>
+                            <i id="search-spinner" class="fa-solid fa-circle-notch fa-spin hidden text-xs"></i>
+                        </button>
+                    </div>
+
+                    <div class="relative mb-3">
+                        <span class="absolute left-4 top-1/2 -translate-y-1/2 text-indigo-950 font-bold text-base">@</span>
+                        <input type="text" id="username-input" placeholder="Enter username..." value="" 
+                               oninput="handleUsernameInput()"
+                               class="w-full pl-9 pr-4 py-3 bg-slate-50 border border-slate-100 rounded-xl font-semibold text-indigo-950 text-sm focus:outline-none focus:bg-white focus:border-slate-300 transition">
+                    </div>
+
+                    <!-- User Profile Card -->
+                    <div id="profile-card" class="flex items-center gap-3.5 p-3 bg-slate-50 rounded-2xl border border-slate-100 relative">
+                        <div class="w-11 h-11 rounded-full bg-slate-900 flex items-center justify-center shrink-0 overflow-hidden relative border border-slate-200">
+                            <img id="user-avatar" src="https://ui-avatars.com/api/?name=User&background=cbd5e1&color=64748b&bold=true" alt="Profile" class="w-full h-full object-cover">
+                        </div>
+                        <div class="overflow-hidden flex-1">
+                            <div class="text-[11px] text-slate-400 font-medium leading-none mb-1">Nickname</div>
+                            <div id="user-handle" class="font-bold text-slate-400 text-[14px] truncate leading-tight">Enter TikTok Username</div>
+                        </div>
+                    </div>
+                    <!-- User Search Status Badge -->
+                    <div id="user-status-badge" class="hidden mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"></div>
+                </div>
+
+                <!-- Exchange Options Section (Grid including Custom Card Box) -->
+                <div class="mb-6">
+                    <div class="text-[13px] font-semibold text-slate-900 mb-3 px-0.5">Exchange earnings for Coins</div>
+                    
+                    <div class="grid grid-cols-3 gap-2.5">
+                        <!-- Row 1 Card 1: $100 = 7,500 coins -->
+                        <div onclick="selectOption(100, 7500, this)" class="exchange-card cursor-pointer bg-white border border-slate-200 rounded-2xl p-2.5 text-center transition hover:border-slate-300">
+                            <div class="flex justify-center mb-1 coin-slot"></div>
+                            <div class="text-base font-black text-slate-900 tracking-tight">7,500</div>
+                            <div class="text-[10px] text-slate-500 font-semibold mt-0.5">$100</div>
+                        </div>
+
+                        <!-- Row 1 Card 2: $200 = 15,000 coins -->
+                        <div onclick="selectOption(200, 15000, this)" class="exchange-card cursor-pointer bg-white border border-slate-200 rounded-2xl p-2.5 text-center transition hover:border-slate-300">
+                            <div class="flex justify-center mb-1 coin-slot"></div>
+                            <div class="text-base font-black text-slate-900 tracking-tight">15,000</div>
+                            <div class="text-[10px] text-slate-500 font-semibold mt-0.5">$200</div>
+                        </div>
+
+                        <!-- Row 1 Card 3: $400 = 30,000 coins -->
+                        <div onclick="selectOption(400, 30000, this)" class="exchange-card cursor-pointer bg-white border border-slate-200 rounded-2xl p-2.5 text-center transition hover:border-slate-300">
+                            <div class="flex justify-center mb-1 coin-slot"></div>
+                            <div class="text-base font-black text-slate-900 tracking-tight">30,000</div>
+                            <div class="text-[10px] text-slate-500 font-semibold mt-0.5">$400</div>
+                        </div>
+
+                        <!-- Row 2 Card 1: $1,500 = 112,500 coins -->
+                        <div onclick="selectOption(1500, 112500, this)" class="exchange-card cursor-pointer bg-white border border-slate-200 rounded-2xl p-2.5 text-center transition hover:border-slate-300">
+                            <div class="flex justify-center mb-1 coin-slot"></div>
+                            <div class="text-base font-black text-slate-900 tracking-tight">112,500</div>
+                            <div class="text-[10px] text-slate-500 font-semibold mt-0.5">$1,500</div>
+                        </div>
+
+                        <!-- Row 2 Card 2: $2,000 = 150,000 coins -->
+                        <div onclick="selectOption(2000, 150000, this)" class="exchange-card cursor-pointer bg-white border border-slate-200 rounded-2xl p-2.5 text-center transition hover:border-slate-300">
+                            <div class="flex justify-center mb-1 coin-slot"></div>
+                            <div class="text-base font-black text-slate-900 tracking-tight">150,000</div>
+                            <div class="text-[10px] text-slate-500 font-semibold mt-0.5">$2,000</div>
+                        </div>
+
+                        <!-- Row 2 Card 3: $2,600 = 195,000 coins (DEFAULT SELECTED) -->
+                        <div onclick="selectOption(2600, 195000, this)" class="exchange-card card-selected cursor-pointer bg-white border border-slate-200 rounded-2xl p-2.5 text-center transition hover:border-slate-300 relative">
+                            <div class="flex justify-center mb-1 coin-slot"></div>
+                            <div class="text-base font-black text-indigo-950 tracking-tight">195,000</div>
+                            <div class="text-[10px] text-indigo-600 font-semibold mt-0.5">$2,600</div>
+                        </div>
+
+                        <!-- Row 3 Card (CUSTOM COIN BOX MATCHING FIXED AMOUNT BOXES EXACTLY) -->
+                        <div id="custom-card-box" onclick="selectCustomCard(this)" class="exchange-card col-span-3 cursor-pointer bg-white border border-slate-200 rounded-2xl p-3 text-center transition hover:border-slate-300 relative">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <div class="coin-slot flex items-center justify-center"></div>
+                                    <span class="text-xs font-bold text-slate-900">Custom Amount</span>
+                                </div>
+                                <div class="flex-1 max-w-[140px] relative">
+                                    <input type="number" id="custom-coin-input" placeholder="Coins..." 
+                                           onfocus="selectCustomCard(document.getElementById('custom-card-box'))"
+                                           oninput="handleCustomCoinInput(this.value)" 
+                                           class="w-full text-right px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-sm font-black text-slate-900 focus:outline-none focus:bg-white focus:border-ios-purple transition">
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 mt-1.5 pt-1.5 border-t border-slate-100">
+                                <span>Calculated Cost:</span>
+                                <span id="custom-card-cost" class="font-bold text-ios-purple text-xs">$0.00</span>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Primary Button -->
+            <button onclick="executeExchange()" class="w-full bg-ios-purple hover:bg-ios-purpleActive active:scale-[0.98] text-white py-4 rounded-full font-bold text-[16px] shadow-md transition-all duration-150 my-2">
+                Exchange
+            </button>
+        </div>
+
+        <!-- ================= RECEIPT SCREEN ================= -->
+        <div id="receipt-screen" class="hidden px-6 py-8 flex-1 flex flex-col justify-between items-center text-center bg-white min-h-screen">
+            <div class="w-full flex flex-col items-center pt-4">
+                
+                <!-- TOP CENTERED ELEGANT TID BADGE -->
+                <div id="receipt-tid-badge" class="mb-4 inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-50 border border-indigo-100 rounded-full text-xs font-bold text-slate-700 tracking-wider shadow-sm">
+                    <i class="fa-solid fa-receipt text-ios-purple text-xs"></i>
+                    <span class="text-slate-500 font-bold">TID:</span>
+                    <span id="receipt-tid-top" class="text-ios-purple font-mono font-extrabold text-sm tracking-wide">84920491823</span>
+                </div>
+
+                <!-- Green Circle Check -->
+                <div id="receipt-check" class="w-[76px] h-[76px] bg-ios-greenCheck text-white rounded-full flex items-center justify-center mb-4 shadow-md">
+                    <i class="fa-solid fa-check text-4xl stroke-[2.5]"></i>
+                </div>
+
+                <!-- Exchange Completed Title -->
+                <h2 id="receipt-title" class="text-[24px] font-bold text-slate-900 mb-2 tracking-tight">Exchange Completed!</h2>
+                
+                <!-- Subtitle with Inline 3D Coin Icon -->
+                <div id="receipt-subhead" class="text-[14px] font-medium text-slate-700 mb-6 flex items-center justify-center gap-1.5">
+                    <span>You exchanged for</span>
+                    <span class="coin-slot inline-flex items-center"></span>
+                    <span id="receipt-main-coins" class="font-bold text-slate-900">195,000 coins</span>
+                </div>
+
+                <!-- Details List -->
+                <div class="w-full space-y-3.5 text-sm mb-6 px-2">
+                    <div id="row-received" class="flex items-center justify-between">
+                        <span class="text-slate-900 font-semibold text-[14px]">Recipient</span>
+                        <div class="flex items-center gap-2">
+                            <span id="receipt-username" class="font-semibold text-slate-900 text-[14px]">@khaby.lame</span>
+                            <span id="receipt-recipient-tid-inline" class="text-[11px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200">#84920491823</span>
+                        </div>
+                    </div>
+
+                    <div id="row-sender" class="flex items-center justify-between">
+                        <span class="text-slate-900 font-semibold text-[14px]">Sender</span>
+                        <span id="receipt-sender" class="font-semibold text-slate-900 text-[14px]">******beat</span>
+                    </div>
+
+                    <div id="row-coins" class="flex items-center justify-between">
+                        <span class="text-slate-900 font-semibold text-[14px]">Coin Exchange</span>
+                        <span id="receipt-coin-exchange" class="font-bold text-slate-900 text-[14px]">195,000 coins</span>
+                    </div>
+
+                    <div id="row-rate" class="flex items-center justify-between">
+                        <span class="text-slate-900 font-semibold text-[14px]">Rate (1$ TikTok)</span>
+                        <span class="font-semibold text-slate-900 text-[14px]">75 coins</span>
+                    </div>
+
+                    <div id="row-deducted" class="flex items-center justify-between">
+                        <span class="text-slate-900 font-semibold text-[14px]">Deducted Amount</span>
+                        <span id="receipt-deducted-amount" class="font-bold text-slate-900 text-[14px]">$2,600.00</span>
+                    </div>
+
+                    <div id="row-remark" class="flex items-center justify-between">
+                        <span class="text-slate-900 font-semibold text-[14px]">Remark</span>
+                        <span id="receipt-timestamp" class="font-medium text-slate-900 text-[13px]">22/10/2026, 06:25:30</span>
+                    </div>
+                </div>
+
+                <!-- Footer Callout -->
+                <div id="receipt-footer" class="mt-1 mb-2">
+                    <h3 class="font-bold text-slate-900 text-[18px] mb-1 tracking-tight">Perfect level!</h3>
+                    <p class="text-[13px] text-slate-500 font-medium">Get back to earn more easily.</p>
+                </div>
+            </div>
+
+            <!-- Back Button -->
+            <button id="receipt-btn-back" onclick="closeReceipt()" class="w-full bg-ios-purple hover:bg-ios-purpleActive active:scale-[0.98] text-white py-4 rounded-full font-bold text-[16px] shadow-md transition-all duration-150 mb-2">
+                Back
+            </button>
+        </div>
+
+    </div>
+
+    <!-- JavaScript Controller -->
+    <script>
+        const COINS_PER_DOLLAR = 75; // 1 Dollar = 75 Coins
+        let userDollarBalance = 0.00;
+        let selectedDollarAmount = 2600;
+        let selectedCoinsAmount = 195000;
+        let isCustomSelected = false;
+        let isUserFound = true;
+        let activeUser = {
+            username: "",
+            avatarUrl: ""
+        };
+
+        const SENDER_LIST = [
+            "******beat", "******flow", "******pulse", "******wave", 
+            "******star", "******spark", "******drift", "******nexus"
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            checkSixMonthExpiration();
+            loadBalanceFromStorage();
+            injectCoinIcons();
+            updateBalanceUI();
+        });
+
+        // 6-Month Expiration Logic (Baseline: Nov 5, 2026 -> Expires: May 5, 2027)
+        function checkSixMonthExpiration() {
+            const baselineDate = new Date('2026-11-05T00:00:00');
+            
+            const expirationDate = new Date(baselineDate);
+            expirationDate.setMonth(expirationDate.getMonth() + 6);
+
+            const now = new Date();
+            if (now >= expirationDate) {
+                const expiredOverlay = document.getElementById('app-expired-overlay');
+                if (expiredOverlay) {
+                    expiredOverlay.classList.remove('hidden');
+                }
+            }
+        }
+
+        function loadBalanceFromStorage() {
+            const savedBalance = localStorage.getItem('tiktok_user_balance');
+            if (savedBalance !== null) {
+                userDollarBalance = parseFloat(savedBalance) || 0.00;
+            } else {
+                userDollarBalance = 2600.00;
+                saveBalanceToStorage();
+            }
+        }
+
+        function saveBalanceToStorage() {
+            localStorage.setItem('tiktok_user_balance', userDollarBalance.toString());
+        }
+
+        function injectCoinIcons() {
+            const template = document.getElementById('tiktok-coin-svg');
+            const slots = document.querySelectorAll('.coin-slot');
+            slots.forEach(slot => {
+                slot.innerHTML = '';
+                if (template) {
+                    slot.appendChild(template.content.cloneNode(true));
+                }
+            });
+        }
+
+        function updateBalanceUI() {
+            const calculatedCoins = Math.floor(userDollarBalance * COINS_PER_DOLLAR);
+            document.getElementById('balance-amount-display').innerText = userDollarBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('balance-subtitle-coins').innerText = calculatedCoins.toLocaleString();
+        }
+
+        function selectOption(dollars, coins, el) {
+            isCustomSelected = false;
+            document.querySelectorAll('.exchange-card').forEach(card => card.classList.remove('card-selected'));
+            el.classList.add('card-selected');
+            selectedDollarAmount = dollars;
+            selectedCoinsAmount = coins;
+        }
+
+        function selectCustomCard(el) {
+            isCustomSelected = true;
+            document.querySelectorAll('.exchange-card').forEach(card => card.classList.remove('card-selected'));
+            el.classList.add('card-selected');
+            
+            const val = document.getElementById('custom-coin-input').value;
+            handleCustomCoinInput(val);
+        }
+
+        function handleCustomCoinInput(val) {
+            const coins = parseInt(val) || 0;
+            const cost = (coins / COINS_PER_DOLLAR).toFixed(2);
+            document.getElementById('custom-card-cost').innerText = `$${parseFloat(cost).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            
+            if (isCustomSelected) {
+                selectedCoinsAmount = coins;
+                selectedDollarAmount = parseFloat(cost);
+            }
+        }
+
+        function setAvatarSource(cleanUsername) {
+            const avatarImg = document.getElementById('user-avatar');
+            const primaryAvatar = `https://unavatar.io/tiktok/${cleanUsername}?fallback=false`;
+            const secondaryAvatar = `https://api.dicebear.com/7.x/identicon/svg?seed=${cleanUsername}`;
+            const tertiaryAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(cleanUsername)}&background=18181b&color=ffffff&bold=true`;
+
+            avatarImg.onerror = function() {
+                this.onerror = function() {
+                    this.onerror = null;
+                    this.src = tertiaryAvatar;
+                };
+                this.src = secondaryAvatar;
+            };
+
+            avatarImg.src = primaryAvatar;
+        }
+
+        function handleUsernameInput() {
+            const rawInput = document.getElementById('username-input').value.trim();
+            const cleanUsername = rawInput.replace(/^@/, '');
+            
+            if (cleanUsername.length > 0) {
+                activeUser.username = `@${cleanUsername}`;
+                document.getElementById('user-handle').innerText = activeUser.username;
+                setAvatarSource(cleanUsername);
+                isUserFound = true;
+                hideUserStatus();
+            } else {
+                isUserFound = false;
+                hideUserStatus();
+            }
+        }
+
+        function showUserStatus(message, isSuccess) {
+            const badge = document.getElementById('user-status-badge');
+            badge.classList.remove('hidden', 'bg-rose-50', 'text-rose-600', 'border', 'border-rose-200', 'bg-emerald-50', 'text-emerald-600', 'border-emerald-200');
+            
+            if (isSuccess) {
+                badge.classList.add('bg-emerald-50', 'text-emerald-600', 'border', 'border-emerald-200');
+                badge.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-500"></i> ${message}`;
+            } else {
+                badge.classList.add('bg-rose-50', 'text-rose-600', 'border', 'border-rose-200');
+                badge.innerHTML = `<i class="fa-solid fa-circle-xmark text-rose-500"></i> ${message}`;
+            }
+        }
+
+        function hideUserStatus() {
+            const badge = document.getElementById('user-status-badge');
+            badge.classList.add('hidden');
+        }
+
+        function setNotFoundError() {
+            isUserFound = false;
+            document.getElementById('user-handle').innerText = "User not found";
+            document.getElementById('user-avatar').src = "https://placehold.co/100x100/f87171/ffffff?text=?";
+            showUserStatus("User not found!", false);
+        }
+
+        async function fetchTikTokUser() {
+            const rawInput = document.getElementById('username-input').value.trim();
+            const cleanUsername = rawInput.replace(/^@/, '');
+
+            if (!cleanUsername) {
+                setNotFoundError();
+                showToast("Please enter a username", "error");
+                return;
+            }
+
+            const searchBtnText = document.getElementById('search-btn-text');
+            const searchSpinner = document.getElementById('search-spinner');
+
+            searchBtnText.innerText = "Searching";
+            searchSpinner.classList.remove('hidden');
+
+            try {
+                activeUser.username = `@${cleanUsername}`;
+                document.getElementById('user-handle').innerText = activeUser.username;
+                setAvatarSource(cleanUsername);
+
+                const oembedUrl = `https://www.tiktok.com/oembed?url=https://www.tiktok.com/@${cleanUsername}`;
+                const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(oembedUrl)}`;
+
+                const res = await fetch(proxyUrl);
+                if (res.ok) {
+                    const resData = await res.json();
+                    if (resData.contents) {
+                        const tiktokData = JSON.parse(resData.contents);
+                        if (tiktokData.thumbnail_url) {
+                            document.getElementById('user-avatar').src = tiktokData.thumbnail_url;
+                        }
+                    }
+                }
+                
+                isUserFound = true;
+                showUserStatus(`@${cleanUsername} - Verified!`, true);
+                showToast(`Verified @${cleanUsername}`, "success");
+            } catch (e) {
+                isUserFound = true;
+                showUserStatus(`@${cleanUsername} - Verified!`, true);
+                showToast(`Verified @${cleanUsername}`, "success");
+            } finally {
+                searchBtnText.innerText = "Search";
+                searchSpinner.classList.add('hidden');
+            }
+        }
+
+        function generate11DigitTID() {
+            return Math.floor(10000000000 + Math.random() * 90000000000).toString();
+        }
+
+        function getRandomSender() {
+            const index = Math.floor(Math.random() * SENDER_LIST.length);
+            return SENDER_LIST[index];
+        }
+
+        function executeExchange() {
+            const rawInput = document.getElementById('username-input').value.trim();
+            if (!rawInput) {
+                showToast("Please enter a valid TikTok username.", "error");
+                showUserStatus("User not found!", false);
+                return;
+            }
+
+            if (!isUserFound) {
+                handleUsernameInput();
+            }
+
+            if (isCustomSelected) {
+                const val = document.getElementById('custom-coin-input').value;
+                const coins = parseInt(val) || 0;
+                if (coins <= 0) {
+                    showToast("Please enter a valid custom coin amount.", "error");
+                    return;
+                }
+                selectedCoinsAmount = coins;
+                selectedDollarAmount = coins / COINS_PER_DOLLAR;
+            }
+
+            if (userDollarBalance < selectedDollarAmount) {
+                showToast(`Insufficient balance! You need $${selectedDollarAmount.toLocaleString()} but have $${userDollarBalance.toLocaleString('en-US', {minimumFractionDigits: 2})}`, "error");
+                return;
+            }
+
+            // 2-second loading overlay
+            const loadingOverlay = document.getElementById('exchange-loading-overlay');
+            loadingOverlay.classList.remove('hidden');
+
+            setTimeout(() => {
+                loadingOverlay.classList.add('hidden');
+
+                // Deduct balance and update LocalStorage persistently
+                userDollarBalance -= selectedDollarAmount;
+                saveBalanceToStorage();
+                updateBalanceUI();
+
+                // Generate dynamic sender and TID
+                const randomSender = getRandomSender();
+                const tid = generate11DigitTID();
+
+                // Populate receipt data with beautiful centered TID & recipient TID tag
+                document.getElementById('receipt-main-coins').innerText = `${selectedCoinsAmount.toLocaleString()} coins`;
+                document.getElementById('receipt-username').innerText = activeUser.username;
+                document.getElementById('receipt-recipient-tid-inline').innerText = `#${tid}`;
+                document.getElementById('receipt-sender').innerText = randomSender;
+                document.getElementById('receipt-tid-top').innerText = tid;
+                document.getElementById('receipt-coin-exchange').innerText = `${selectedCoinsAmount.toLocaleString()} coins`;
+                document.getElementById('receipt-deducted-amount').innerText = `$${selectedDollarAmount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+                // Generate current timestamp (DD/MM/YYYY, HH:MM:SS)
+                const now = new Date();
+                const d = String(now.getDate()).padStart(2, '0');
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+                const y = now.getFullYear();
+                const hh = String(now.getHours()).padStart(2, '0');
+                const mm = String(now.getMinutes()).padStart(2, '0');
+                const ss = String(now.getSeconds()).padStart(2, '0');
+                document.getElementById('receipt-timestamp').innerText = `${d}/${m}/${y}, ${hh}:${mm}:${ss}`;
+
+                // Display Receipt Screen
+                document.getElementById('exchange-screen').classList.add('hidden');
+                const receiptScreen = document.getElementById('receipt-screen');
+                receiptScreen.classList.remove('hidden');
+                receiptScreen.classList.add('flex');
+
+                injectCoinIcons();
+                runReceiptAnimations();
+            }, 2000);
+        }
+
+        function runReceiptAnimations() {
+            const elements = [
+                { id: 'receipt-tid-badge', class: 'anim-step-1' },
+                { id: 'receipt-check', class: 'anim-pop-check' },
+                { id: 'receipt-title', class: 'anim-step-1' },
+                { id: 'receipt-subhead', class: 'anim-step-2' },
+                { id: 'row-received', class: 'anim-step-3' },
+                { id: 'row-sender', class: 'anim-step-3' },
+                { id: 'row-coins', class: 'anim-step-3' },
+                { id: 'row-rate', class: 'anim-step-4' },
+                { id: 'row-deducted', class: 'anim-step-4' },
+                { id: 'row-remark', class: 'anim-step-4' },
+                { id: 'receipt-footer', class: 'anim-step-4' },
+                { id: 'receipt-btn-back', class: 'anim-step-4' }
+            ];
+
+            elements.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) {
+                    el.classList.remove('anim-pop-check', 'anim-step-1', 'anim-step-2', 'anim-step-3', 'anim-step-4');
+                    void el.offsetWidth;
+                    el.classList.add(item.class);
+                }
+            });
+        }
+
+        function closeReceipt() {
+            const receiptScreen = document.getElementById('receipt-screen');
+            receiptScreen.classList.add('hidden');
+            receiptScreen.classList.remove('flex');
+            document.getElementById('exchange-screen').classList.remove('hidden');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            const toastIcon = document.getElementById('toast-icon');
+
+            toastMsg.innerText = message;
+            toastIcon.className = type === 'error' ? "fa-solid fa-circle-exclamation text-rose-400 text-sm" :
+                                 type === 'success' ? "fa-solid fa-circle-check text-emerald-400 text-sm" :
+                                 "fa-solid fa-circle-info text-blue-400 text-sm";
+
+            toast.classList.remove('-translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('-translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+    <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
+</body>
+</html>
